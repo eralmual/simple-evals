@@ -6,20 +6,24 @@ https://arxiv.org/abs/2009.03300
 
 import random
 import re
+from datasets import Dataset
 
-import blobfile as bf
+import requests
+import io
 import pandas
 
-from . import common
-from .common import (
+from common import (
     HTML_JINJA,
     MULTILINGUAL_ANSWER_PATTERN_TEMPLATE,
     MULTILINGUAL_ANSWER_REGEXES,
     format_multichoice_question,
     normalize_extracted_answer,
     normalize_response,
+    map_with_progress,
+    aggregate_results,
+    jinja_env,
 )
-from .types import Eval, EvalResult, SamplerBase, SingleEvalResult
+from eval_types import Eval, EvalResult, SamplerBase, SingleEvalResult
 
 subject2category = {
     "abstract_algebra": "stem",
@@ -88,29 +92,37 @@ class MMLUEval(Eval):
             url = f"https://openaipublic.blob.core.windows.net/simple-evals/mmlu_{language}.csv"
         else:
             url = "https://openaipublic.blob.core.windows.net/simple-evals/mmlu.csv"
-        df = pandas.read_csv(bf.BlobFile(url))
+
+        response = requests.get(url)
+        response.raise_for_status() 
+        df = pandas.read_csv(io.StringIO(response.text))
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             examples = random.Random(0).sample(examples, num_examples)
-        self.examples = examples
+        self.examples = Dataset.from_pandas(examples)
 
-    def __call__(self, sampler: SamplerBase) -> EvalResult:
+    def __call__(self, sampler: SamplerBase, debug: bool = False, num_threads: int = 16) -> EvalResult:
         def fn(row: dict):
             prompt_messages = [
                 sampler._pack_message(
                     content=format_multichoice_question(row), role="user"
                 )
             ]
-            response_text = normalize_response(sampler(prompt_messages))
+            #tqdm.write("Prompting")
+            response_text = sampler(prompt_messages)
+            #tqdm.write("Generation complete")
+            response_text = normalize_response(response_text)
             extracted_answer = None
+            #tqdm.write("Evaluating answer")
             for answer_regex in MULTILINGUAL_ANSWER_REGEXES:
                 regex = MULTILINGUAL_ANSWER_PATTERN_TEMPLATE.format(answer_regex)
                 match = re.search(regex, response_text)
                 if match:
                     extracted_answer = normalize_extracted_answer(match.group(1))
                     break
+            #tqdm.write("Scoring")
             score = 1.0 if extracted_answer == row["Answer"] else 0.0
-            html = common.jinja_env.from_string(HTML_JINJA).render(
+            html = jinja_env.from_string(HTML_JINJA).render(
                 prompt_messages=prompt_messages,
                 next_message=dict(content=response_text, role="assistant"),
                 score=score,
@@ -119,9 +131,10 @@ class MMLUEval(Eval):
             )
             convo = prompt_messages + [dict(content=response_text, role="assistant")]
             category = subject2category.get(row["Subject"], "other")
+            #tqdm.write("Returning")
             return SingleEvalResult(
                 html=html, score=score, metrics={category: score}, convo=convo
             )
 
-        results = common.map_with_progress(fn, self.examples)
-        return common.aggregate_results(results)
+        results = map_with_progress(fn, self.examples, debug=debug, num_threads=num_threads)
+        return aggregate_results(results)

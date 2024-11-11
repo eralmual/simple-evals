@@ -7,7 +7,7 @@ import jinja2
 import numpy as np
 from tqdm import tqdm
 
-from .types import EvalResult, Message, SamplerBase, SingleEvalResult
+from eval_types import EvalResult, Message, SamplerBase, SingleEvalResult
 
 QUERY_TEMPLATE_MULTICHOICE = """
 Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
@@ -199,15 +199,15 @@ def aggregate_results(
     )
 
 
-def map_with_progress(f: callable, xs: list[Any], num_threads: int = 50):
+def map_with_progress(f: callable, xs: list[Any], num_threads: int = 16, debug: bool = False) -> list[Any]:
     """
     Apply f to each element of xs, using a ThreadPool, and show progress.
     """
-    if os.getenv("debug"):
-        return list(map(f, tqdm(xs, total=len(xs))))
+    if debug or (num_threads == 1):
+        return list(map(f, tqdm(xs, total=len(xs), desc="Sequential execution")))
     else:
         with ThreadPool(min(num_threads, len(xs))) as pool:
-            return list(tqdm(pool.imap(f, xs), total=len(xs)))
+            return list(tqdm(pool.imap(f, xs), total=len(xs), desc="Running MT"))
 
 
 jinja_env = jinja2.Environment(

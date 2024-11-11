@@ -11,6 +11,12 @@ class SamplerBase:
     or used as part of the grading process.
     """
 
+    def _handle_text(self, text: str):
+        return {"type": "text", "text": text}
+
+    def _pack_message(self, role: str, content: Any):
+        return {"role": str(role), "content": content}
+
     def __call__(self, message_list: MessageList) -> str:
         raise NotImplementedError
 
