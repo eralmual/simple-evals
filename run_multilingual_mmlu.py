@@ -8,7 +8,7 @@ import pandas as pd
 from common import make_report
 from mmlu_eval import MMLUEval
 
-from samplers import GemmaCompletionSampler, LlamaCompletionSampler
+from samplers import ModelCompletionSampler, PipelineCompletionSampler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device("xpu" if torch.xpu.is_available() else device)
@@ -16,22 +16,40 @@ device = torch.device("xpu" if torch.xpu.is_available() else device)
 def main(results_path: str, debug: bool, num_threads: int, sample_size: int):
     print(f"Using device: {device}")
     samplers = {
-        #"gemma-2-2b-it-bf16": GemmaCompletionSampler(
-        #    model_id="google/gemma-2-2b-it",
-        #    max_tokens=1024,
-        #    device=device,
-        #    d_type=torch.bfloat16,
-        #),
-        #"Llama-3.2-3B-bf16": LlamaCompletionSampler(
-        #    model_id="meta-llama/Llama-3.2-3B-Instruct",
-        #    max_tokens=1024,
-        #    d_type=torch.bfloat16,
-        #    device=device,
-        #),
-        "Phi-3.5-mini-instruct-bf16": LlamaCompletionSampler(
+        "gemma-2-2b-it-bf16": ModelCompletionSampler(
+            model_id="google/gemma-2-2b-it",
+            max_tokens=1024,
+            device=device,
+            d_type=torch.bfloat16,
+        ),
+        "gemma-2-2b-it-4bit": ModelCompletionSampler(
+            model_id="google/gemma-2-2b-it",
+            max_tokens=1024,
+            device=device,
+            d_type=4,
+        ),
+        "Llama-3.2-3B-bf16": PipelineCompletionSampler(
+            model_id="meta-llama/Llama-3.2-3B-Instruct",
+            max_tokens=1024,
+            d_type=torch.bfloat16,
+            device=device,
+        ),
+        "Llama-3.2-3B-4bit": PipelineCompletionSampler(
+            model_id="meta-llama/Llama-3.2-3B-Instruct",
+            max_tokens=1024,
+            d_type=4,
+            device=device,
+        ),
+        "Phi-3.5-mini-instruct-bf16": PipelineCompletionSampler(
             model_id="microsoft/Phi-3.5-mini-instruct",
             max_tokens=1024,
             d_type=torch.bfloat16,
+            device=device,
+        ),
+        "Phi-3.5-mini-instruct-4bit": PipelineCompletionSampler(
+            model_id="microsoft/Phi-3.5-mini-instruct",
+            max_tokens=1024,
+            d_type=4,
             device=device,
         ),
     }
@@ -72,21 +90,21 @@ def main(results_path: str, debug: bool, num_threads: int, sample_size: int):
                 raise Exception(f"Unrecoginized eval type: {eval_name}")
 
     evals = [
-            "mmlu_AR-XY",
-            #"mmlu_BN-BD",
-            #"mmlu_DE-DE",
-            "mmlu_EN-US",
-            "mmlu_ES-LA",
-            #"mmlu_FR-FR",
-            #"mmlu_HI-IN",
-            #"mmlu_ID-ID",
-            #"mmlu_IT-IT",
-            "mmlu_JA-JP",
-            #"mmlu_KO-KR",
-            #"mmlu_PT-BR",
-            #"mmlu_ZH-CN",
-            #"mmlu_SW-KE",
-            "mmlu_YO-NG",
+        #"mmlu_AR-XY",
+        #"mmlu_BN-BD",
+        #"mmlu_DE-DE",
+        "mmlu_EN-US",
+        "mmlu_ES-LA",
+        #"mmlu_FR-FR",
+        #"mmlu_HI-IN",
+        "mmlu_ID-ID",
+        #"mmlu_IT-IT",
+        #"mmlu_JA-JP",
+        #"mmlu_KO-KR",
+        #"mmlu_PT-BR",
+        "mmlu_ZH-CN",
+        #"mmlu_SW-KE",
+        #"mmlu_YO-NG",
     ]
     
     print(evals)

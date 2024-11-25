@@ -2,16 +2,13 @@ import os
 import torch
 from typing import Any
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from transformers import pipeline
 
 
 from eval_types import MessageList, SamplerBase
 
-class GemmaCompletionSampler(SamplerBase):
-    """
-    Sample from OpenAI's chat completion API for o1 models
-    """
+class ModelCompletionSampler(SamplerBase):
 
     def __init__(
         self,
@@ -33,8 +30,15 @@ class GemmaCompletionSampler(SamplerBase):
             self.model = AutoModelForCausalLM.from_pretrained(self.model_id, 
                                                             device_map=self.device,
                                                             torch_dtype=d_type,
-                                                            attn_implementation="flash_attention_2",
                                                             ) 
+        elif(d_type == 4):
+            print("Running ", self.model_id, " with 4 bit quantization")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_id,
+                device_map=self.device,
+                quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16),
+            )
+
             
         else:
             raise ValueError(f"Unsupported dtype: {d_type}")
@@ -51,10 +55,7 @@ class GemmaCompletionSampler(SamplerBase):
     
 
 
-class LlamaCompletionSampler(SamplerBase):
-    """
-    Sample from OpenAI's chat completion API for o1 models
-    """
+class PipelineCompletionSampler(SamplerBase):
 
     def __init__(
         self,
@@ -67,13 +68,21 @@ class LlamaCompletionSampler(SamplerBase):
         self.model_id = model_id
         self.device = device
 
-        self.pipe = pipeline(
-            "text-generation",
-            model=model_id,
-            torch_dtype=d_type,
-            device_map=self.device,
-            model_kwargs={"attn_implementation": "flash_attention_2",}
-        )
+        if(d_type == 4):
+            print("Running", self.model_id, "with 4 bit quantization")
+            self.pipe = pipeline(
+                "text-generation",
+                model=model_id,
+                device_map=self.device,
+                model_kwargs={"quantization_config": BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)}
+            )
+        else:
+            self.pipe = pipeline(
+                "text-generation",
+                model=model_id,
+                torch_dtype=d_type,
+                device_map=self.device,
+            )
         
 
     def __call__(self, message_list: MessageList) -> str:
@@ -86,4 +95,3 @@ class LlamaCompletionSampler(SamplerBase):
 
         return response[0]["generated_text"][-1]["content"]
     
-#Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering. If today is Monday, then what day is tomorrow A) Thursday B) Wednesday C) Tuesday D) Monday

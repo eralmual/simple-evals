@@ -6,7 +6,6 @@ https://arxiv.org/abs/2009.03300
 
 import random
 import re
-from datasets import Dataset
 
 import requests
 import io
@@ -99,7 +98,7 @@ class MMLUEval(Eval):
         examples = [row.to_dict() for _, row in df.iterrows()]
         if num_examples:
             examples = random.Random(0).sample(examples, num_examples)
-        self.examples = Dataset.from_pandas(examples)
+        self.examples = examples
 
     def __call__(self, sampler: SamplerBase, debug: bool = False, num_threads: int = 16) -> EvalResult:
         def fn(row: dict):
